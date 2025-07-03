@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     QURAN_QDRANT_API_KEY: str
     HADITH_QDRANT_API_KEY: str
     TAFSEER_QDRANT_API_KEY: str
-    
-    
-    
+
+
+    class Config:
+        env_file = ".env"
+
+
+
 settings = Settings()
