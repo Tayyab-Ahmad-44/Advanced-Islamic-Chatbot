@@ -225,6 +225,7 @@ class LanggraphService:
 
         # Add nodes
         workflow.add_node("classify_query", self._classify_multi_source_query)
+        workflow.add_node("route_to_source", self._route_to_next_source)  
         workflow.add_node("retrieve_quran", self._retrieve_from_quran)
         workflow.add_node("retrieve_hadith", self._retrieve_from_hadith)
         workflow.add_node("retrieve_tafseer", self._retrieve_from_tafseer)
@@ -234,9 +235,12 @@ class LanggraphService:
         # Set entry point
         workflow.set_entry_point("classify_query")
 
-        # Route from classification to first source
+        # Route from classification to routing logic
+        workflow.add_edge("classify_query", "route_to_source")
+
+        # Route from routing node to appropriate source
         workflow.add_conditional_edges(
-            "classify_query",
+            "route_to_source",
             self._route_to_next_source,
             {
                 "retrieve_quran": "retrieve_quran",
@@ -247,12 +251,12 @@ class LanggraphService:
             }
         )
 
-        # After each retrieval, check if more sources are needed
+        # After each retrieval, route to next source or generate response
         workflow.add_conditional_edges(
             "retrieve_quran",
             self._should_continue_retrieval,
             {
-                "continue_retrieval": "classify_query",  # Go back to route to next source
+                "continue_retrieval": "route_to_source",
                 "generate_response": "generate_response"
             }
         )
@@ -261,7 +265,7 @@ class LanggraphService:
             "retrieve_hadith",
             self._should_continue_retrieval,
             {
-                "continue_retrieval": "classify_query",  # Go back to route to next source
+                "continue_retrieval": "route_to_source",
                 "generate_response": "generate_response"
             }
         )
@@ -270,7 +274,7 @@ class LanggraphService:
             "retrieve_tafseer",
             self._should_continue_retrieval,
             {
-                "continue_retrieval": "classify_query",  # Go back to route to next source
+                "continue_retrieval": "route_to_source",
                 "generate_response": "generate_response"
             }
         )

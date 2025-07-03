@@ -43,7 +43,8 @@ async def main():
 @application.post('/query')
 def process_user_query(request: UserQuerySchema):  
     """Process user query and return Islamic chatbot response"""
-    try:    
+
+    try:
         query = request.query
 
         response = langgraph_service.query(query)
