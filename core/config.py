@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    VERSION: str = "1.0"
+    VERSION: str = "1.1"
     LOGGING_DIR: str = "logs"
     LLM_MODEL: str = "gpt-4.1-nano"
 
