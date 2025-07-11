@@ -2,7 +2,10 @@ import streamlit as st
 import requests
 import json
 from datetime import datetime
+from audio_recorder_streamlit import audio_recorder
 import time
+import os
+
 
 # Page configuration
 st.set_page_config(
@@ -182,13 +185,64 @@ def send_query(query):
             timeout=30
         )
         if response.status_code == 200:
-            return response.json()["response"]
+            data = response.json()
+            if data["status"] == "success":
+                return data["message"]
+            else:
+                return f"Error: {data['message']}"
         else:
             return f"Error: {response.status_code} - {response.text}"
+        
     except requests.exceptions.RequestException as e:
         return f"Connection error: {str(e)}"
 
-# Main UI
+
+#helper funtion to save audio.wav
+def save_audio_as_wav(audio_bytes: bytes, dir_path: str = "recordings") -> str | None:
+
+    try:
+        # Ensure the directory exists
+        os.makedirs(dir_path, exist_ok=True)
+
+        timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename    = f"audio_recording_{timestamp}.wav"
+        file_path   = os.path.join(dir_path, filename)
+
+        with open(file_path, "wb") as f:
+            f.write(audio_bytes)
+
+        # return file_path
+        return dir_path
+    
+    except Exception as e:
+        st.error(f"❌ Couldn’t save audio: {e}")
+        return None
+
+
+def send_voice(dir_path):
+    """Send audio file to FastAPI backend"""
+    try:
+        response = requests.post(
+            # "http://127.0.0.1:8000/audio_query",
+            "https://55e2e322b378.ngrok-free.app//audio_query",
+            json = {"file_path": dir_path},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["status"] == "success":
+                return data["message"]
+            else:
+                return f"Error: {data['message']}"
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+    
+    except requests.exceptions.RequestException as e:
+        return f"Connection error: {str(e)}"
+    except Exception as e:
+        return f"Error processing audio: {str(e)}"
+
 def main():
     # Header
     st.markdown("""
@@ -198,21 +252,93 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Simple input and response
-    st.markdown("### Ask your question:")
-    user_input = st.text_input("Question:", placeholder="Type your Islamic question here...")
+    # CSS for styling
+    st.markdown("""
+    <style>
+    .input-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .voice-section {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
+    # Initialize session state for user input
+    if 'user_input' not in st.session_state:
+        st.session_state.user_input = ""
+    
+    st.markdown("### Ask your question:")
+    
+    # Voice input section
+    st.markdown("#### 🎤 Voice Input (Optional):")
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Audio recorder
+        audio_bytes = audio_recorder(
+            text="Click to record",
+            recording_color="#e74c3c",
+            neutral_color="#34495e",
+            icon_name="microphone",
+            icon_size="20px"
+        )
+    
+    with col2:
+        if audio_bytes:
+            st.audio(audio_bytes, format="audio/wav")
+            st.success("✅ Recording captured!")
+    
+    # Process voice input
+    if audio_bytes:
+        with st.spinner("Processing voice input..."):
+            dir_path = save_audio_as_wav(audio_bytes)
+            if dir_path:
+                response = send_voice(dir_path)
+                st.success("✅ Voice input processed!")
+                
+                # Display the voice response
+                st.markdown("#### Voice Response:")
+                st.markdown(response)
+    
+    # Text input with voice-converted text
+    st.markdown("#### ✍️ Text Input:")
+    user_input = st.text_input(
+        "Question:", 
+        value=st.session_state.user_input,
+        placeholder="Type your Islamic question here or use voice input above...",
+        key="question_input"
+    )
+    
+    # Update session state when text input changes
+    if user_input != st.session_state.user_input:
+        st.session_state.user_input = user_input
+    
+    # Clear button
+    if st.button("🗑️ Clear", help="Clear the input field"):
+        st.session_state.user_input = ""
+        st.rerun()
+    
+    # Send button
     if st.button("Send", type="primary"):
-        if user_input.strip():
+        if st.session_state.user_input.strip():
             with st.spinner("Getting response..."):
-                bot_response = send_query(user_input)
+                bot_response = send_query(st.session_state.user_input)
             
             st.markdown("#### Your Question:")
-            st.write(user_input)
+            st.write(st.session_state.user_input)
             
             st.markdown("#### Response:")
             st.markdown(bot_response)
-    
+        else:
+            st.warning("Please enter a question or use voice input.")
+
     # Sidebar
     with st.sidebar:
         st.markdown("### About")
