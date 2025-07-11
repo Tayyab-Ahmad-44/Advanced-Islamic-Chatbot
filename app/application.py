@@ -24,6 +24,7 @@ qdrant_configs = {
         "api_key": settings.HADITH_QDRANT_API_KEY,
         "collection": "hadith_collection"
     },
+    
     "tafseer": {
         "url": settings.TAFSEER_QDRANT_URL,
         "api_key": settings.TAFSEER_QDRANT_API_KEY,
