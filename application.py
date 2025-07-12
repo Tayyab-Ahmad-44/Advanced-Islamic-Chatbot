@@ -62,7 +62,11 @@ async def process_text_query(request: TextQuerySchema):
         
         
         if query.is_russian:
-            response = openai_service.convert_response_to_russian(query)
+            conversion_response = openai_service.convert_response_to_russian(response)
+            if conversion_response["status"] == "error":
+                return conversion_response
+
+            response = conversion_response['message']
 
 
         return {"status": "success", "message": response} 
@@ -98,7 +102,11 @@ async def process_audio_query(request: AudioQuerySchema):
 
 
         if query.is_russian:
-            response = openai_service.convert_response_to_russian(query)
+            conversion_response = openai_service.convert_response_to_russian(response)
+            if conversion_response["status"] == "error":
+                return conversion_response
+
+            response = conversion_response['message']
 
 
         return {"status": "success", "message": response}
