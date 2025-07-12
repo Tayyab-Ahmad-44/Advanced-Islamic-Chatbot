@@ -1,4 +1,3 @@
-
 import os
 import asyncio
 from datetime import datetime
@@ -227,113 +226,74 @@ async def send_voice(dir_path):
     except Exception as e:
         return f"Error processing audio: {str(e)}"
 
+# Main App
 async def main():
-    # Header
     st.markdown("""
     <div class="header-container">
         <h1>🕌 Islamic Knowledge Chatbot</h1>
         <p>Ask questions about Islamic teachings, Quran verses, and Islamic guidance</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # CSS for styling
-    st.markdown("""
-    <style>
-    .input-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 20px;
-    }
-    .voice-section {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 15px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Initialize session state for user input
+
     if 'user_input' not in st.session_state:
         st.session_state.user_input = ""
-    
+
     st.markdown("### Ask your question:")
-    
-    # Voice input section
-    st.markdown("#### 🎤 Voice Input (Optional):")
-    col1, col2 = st.columns([3, 1])
-    
+
+    col1, col2 = st.columns([8, 1])
     with col1:
-        # Audio recorder
+        user_input = st.text_input(
+            "Type here or use mic...",
+            value=st.session_state.user_input,
+            placeholder="e.g., What does Islam say about patience?",
+            label_visibility="collapsed"
+        )
+    with col2:
         audio_bytes = audio_recorder(
-            text="Click to record",
+            text="",
+            icon_name="microphone",
             recording_color="#e74c3c",
             neutral_color="#34495e",
-            icon_name="microphone",
-            icon_size="20px"
+            icon_size="25px"
         )
-    
-    with col2:
-        if audio_bytes:
-            st.audio(audio_bytes, format="audio/wav")
-            st.success("✅ Recording captured!")
-    
-    # Process voice input
-    if audio_bytes:
-        with st.spinner("Processing voice input..."):
-            dir_path = save_audio_as_wav(audio_bytes)
-            if dir_path:
-                response = await send_voice(dir_path)
-                st.success("✅ Voice input processed!")
-                
-                # Display the voice response
-                st.markdown("#### Voice Response:")
-                st.markdown(response)
-    
-    # Text input with voice-converted text
-    st.markdown("#### ✍️ Text Input:")
-    user_input = st.text_input(
-        "Question:", 
-        value=st.session_state.user_input,
-        placeholder="Type your Islamic question here or use voice input above...",
-        key="question_input"
-    )
-    
-    # Update session state when text input changes
+
     if user_input != st.session_state.user_input:
         st.session_state.user_input = user_input
-    
-    # Clear button
-    if st.button("🗑️ Clear", help="Clear the input field"):
+
+    if audio_bytes:
+        with st.spinner("Processing voice input..."):
+            path = save_audio_as_wav(audio_bytes)
+            if path:
+                response = await send_voice(path)
+                st.success("✅ Voice input processed!")
+                st.markdown("#### Voice Response:")
+                st.markdown(response)
+
+    if st.button("🗑 Clear", help="Clear the input field"):
         st.session_state.user_input = ""
         st.rerun()
-    
-    # Send button
+
     if st.button("Send", type="primary"):
         if st.session_state.user_input.strip():
             with st.spinner("Getting response..."):
                 bot_response = await send_query(st.session_state.user_input)
-            
             st.markdown("#### Your Question:")
             st.write(st.session_state.user_input)
-            
             st.markdown("#### Response:")
             st.markdown(bot_response)
         else:
             st.warning("Please enter a question or use voice input.")
 
-    # Sidebar
     with st.sidebar:
         st.markdown("### About")
         st.info("This chatbot provides Islamic knowledge based on authentic sources.")
-        
         st.markdown("### Features")
         st.markdown("""
-        - 📖 Quranic verses with Arabic text
-        - 🔍 Authentic Islamic teachings
-        - 📚 Sourced references
+        - 📖 Quranic verses with Arabic text  
+        - 🔍 Authentic Islamic teachings  
+        - 📚 Sourced references  
         """)
 
+# Entry point
 if __name__ == "__main__":
     asyncio.run(main())
