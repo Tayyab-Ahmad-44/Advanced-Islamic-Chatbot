@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 
 
-class UserQuerySchema(BaseModel):
+class AudioQuerySchema(BaseModel):
     """Schema for user query data"""
     
-    query: str
+    file_path: str

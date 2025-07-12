@@ -7,7 +7,9 @@ class Settings(BaseSettings):
     LOGGING_DIR: str = "logs"
     LLM_MODEL: str = "gpt-4.1-nano"
 
+    GROQ_API_KEY: str
     OPENAI_API_KEY: str
+    GEMINI_API_KEY: str
     QURAN_QDRANT_URL: str
     HADITH_QDRANT_URL: str
     TAFSEER_QDRANT_URL: str

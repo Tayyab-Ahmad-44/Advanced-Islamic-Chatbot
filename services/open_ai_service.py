@@ -9,9 +9,11 @@ from langchain.schema import HumanMessage, SystemMessage
 
 from core.config import settings
 from schemas.structured_outputs.query_classification import QueryClassificationSchema
+from schemas.structured_outputs.query_translation import TranslateQuerySchema
 
 from services.prompt_templates import (
-    QUERY_CLASSIFICATION_PROMPT, FINAL_RESPONSE_PROMPT
+    QUERY_CLASSIFICATION_PROMPT, FINAL_RESPONSE_PROMPT,
+    TRANSLATE_TO_ENGLISH, TRANSLATE_TO_RUSSIAN
 )
 
 
@@ -43,6 +45,23 @@ class OpenAIService:
         prompt = self._replacer(FINAL_RESPONSE_PROMPT, context=context)
 
         return self._process_request(prompt, query, None)
+
+
+
+
+    def convert_query_to_english(self, query):
+        """Translate the Russian query to English if it is."""
+
+        return self._process_request(TRANSLATE_TO_ENGLISH, query, TranslateQuerySchema)
+
+
+
+
+
+    def convert_response_to_russian(self, query):
+        """Translate the english text to Russian"""
+
+        return self._process_request(TRANSLATE_TO_RUSSIAN, query)
 
 
 

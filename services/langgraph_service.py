@@ -1,8 +1,6 @@
 
 import logging
-
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
 from services.qdrant_service import QdrantService
 from services.open_ai_service import openai_service
@@ -60,10 +58,11 @@ class LanggraphService:
             if not required_sources:
                 required_sources.append(ContentType.GENERAL)
 
-            
+
             state.required_sources = required_sources
             state.current_source_index = 0  # Reset index
-            
+
+
             # Log the classification details
             logging.info("LLM Classification Results:")
             logging.info(f"  - Required sources (in order): {[s.value for s in required_sources]}")
@@ -176,9 +175,21 @@ class LanggraphService:
 
 
 
-    def _route_to_next_source(self, state: LangraphState) -> str:
+    def _route_to_next_source(self, state: LangraphState) -> LangraphState:
         """
         Route to the next required source based on classification order
+        This is now a regular node, not a conditional edge function
+        """
+        # Just return the state as-is, routing logic will be handled by conditional edges
+        return state
+
+
+
+
+ 
+    def _determine_next_route(self, state: LangraphState) -> str:
+        """
+        Determine the next route - this is the actual conditional edge function
         """
         # Check if we should use fallback (GENERAL source)
         if ContentType.GENERAL in state.required_sources:
@@ -241,7 +252,7 @@ class LanggraphService:
         # Route from routing node to appropriate source
         workflow.add_conditional_edges(
             "route_to_source",
-            self._route_to_next_source,
+            self._determine_next_route,
             {
                 "retrieve_quran": "retrieve_quran",
                 "retrieve_hadith": "retrieve_hadith", 
@@ -285,8 +296,8 @@ class LanggraphService:
         # End after response generation
         workflow.add_edge("generate_response", END)
         
-        # Compile the graph
-        return workflow.compile(checkpointer=MemorySaver())
+        # Compile the graph without checkpointer
+        return workflow.compile()
 
 
 
@@ -303,18 +314,22 @@ class LanggraphService:
         Returns:
             Generated response from the system
         """
-        # Create initial state
-        initial_state = LangraphState(
-            user_query=user_query,
-            base_prompt=base_prompt or "Please provide a comprehensive Islamic answer to the following question:",
-            required_sources=[],
-            completed_sources=set(),
-            retrieved_documents={},
-            final_response="",
-            current_source_index=0
-        )
-        
-        # Run the graph
-        final_state = self.graph.invoke(initial_state)
-        
-        return final_state['final_response']
+        try:
+            # Create initial state
+            initial_state = LangraphState(
+                user_query=user_query,
+                base_prompt=base_prompt or "Please provide a comprehensive Islamic answer to the following question:",
+                required_sources=[],
+                completed_sources=set(),
+                retrieved_documents={},
+                final_response="",
+                current_source_index=0
+            )
+            
+            # Run the graph without configuration (no checkpointer)
+            final_state = self.graph.invoke(initial_state)
+            
+            return final_state['final_response']
+        except Exception as e:
+            print("Error while Querying: ", e)
+            return str(e)

@@ -1,10 +1,14 @@
-import streamlit as st
-import requests
-import json
-from datetime import datetime
-from audio_recorder_streamlit import audio_recorder
-import time
+
 import os
+import asyncio
+from datetime import datetime
+
+import streamlit as st
+from audio_recorder_streamlit import audio_recorder
+
+from schemas.routes.text_query import TextQuerySchema
+from schemas.routes.audio_query import AudioQuerySchema 
+from application import process_text_query, process_audio_query
 
 
 # Page configuration
@@ -176,24 +180,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def send_query(query):
+async def send_query(query):
     """Send query to FastAPI backend"""
     try:
-        response = requests.post(
-            "http://127.0.0.1:8000/query",
-            json={"query": query},
-            timeout=30
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data["status"] == "success":
-                return data["message"]
-            else:
-                return f"Error: {data['message']}"
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        data = TextQuerySchema(query=query)
         
-    except requests.exceptions.RequestException as e:
+        response = await process_text_query(data)
+
+        return response['message']
+
+    except Exception as e:
         return f"Connection error: {str(e)}"
 
 
@@ -219,31 +215,19 @@ def save_audio_as_wav(audio_bytes: bytes, dir_path: str = "recordings") -> str |
         return None
 
 
-def send_voice(dir_path):
+async def send_voice(dir_path):
     """Send audio file to FastAPI backend"""
     try:
-        response = requests.post(
-            # "http://127.0.0.1:8000/audio_query",
-            "https://55e2e322b378.ngrok-free.app//audio_query",
-            json = {"file_path": dir_path},
-            timeout=30
-        )
+        data = AudioQuerySchema(file_path=dir_path)
         
-        if response.status_code == 200:
-            data = response.json()
-            if data["status"] == "success":
-                return data["message"]
-            else:
-                return f"Error: {data['message']}"
-        else:
-            return f"Error: {response.status_code} - {response.text}"
-    
-    except requests.exceptions.RequestException as e:
-        return f"Connection error: {str(e)}"
+        response = await process_audio_query(data)
+        
+        return response['message']
+
     except Exception as e:
         return f"Error processing audio: {str(e)}"
 
-def main():
+async def main():
     # Header
     st.markdown("""
     <div class="header-container">
@@ -300,7 +284,7 @@ def main():
         with st.spinner("Processing voice input..."):
             dir_path = save_audio_as_wav(audio_bytes)
             if dir_path:
-                response = send_voice(dir_path)
+                response = await send_voice(dir_path)
                 st.success("✅ Voice input processed!")
                 
                 # Display the voice response
@@ -329,7 +313,7 @@ def main():
     if st.button("Send", type="primary"):
         if st.session_state.user_input.strip():
             with st.spinner("Getting response..."):
-                bot_response = send_query(st.session_state.user_input)
+                bot_response = await send_query(st.session_state.user_input)
             
             st.markdown("#### Your Question:")
             st.write(st.session_state.user_input)
@@ -352,4 +336,4 @@ def main():
         """)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

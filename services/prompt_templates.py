@@ -40,3 +40,15 @@ Instructions:
 - If sources contradict or provide different perspectives, acknowledge this
 - If the context doesn't contain sufficient information, say so and provide general guidance
 """
+
+
+
+
+
+TRANSLATE_TO_ENGLISH = """You are a helpful assistant. If the following text is in English, return it as is and set is_russian to False. If it is in Russian, translate it to English and set is_russian to True."""
+
+
+
+
+
+TRANSLATE_TO_RUSSIAN = """You are a translator. Translate the following English text to Russian. If any part of the text is in Arabic, leave the Arabic text unchanged. Do not translate the Arabic."""
