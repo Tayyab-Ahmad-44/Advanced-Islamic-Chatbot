@@ -208,17 +208,17 @@ def save_audio_as_wav(audio_bytes: bytes, dir_path: str = "recordings") -> str |
             f.write(audio_bytes)
 
         # return file_path
-        return dir_path
+        return file_path
     
     except Exception as e:
         st.error(f"❌ Couldn’t save audio: {e}")
         return None
 
 
-async def send_voice(dir_path):
+async def send_voice(file_path):
     """Send audio file to FastAPI backend"""
     try:
-        data = AudioQuerySchema(file_path=dir_path)
+        data = AudioQuerySchema(file_path=file_path)
         
         response = await process_audio_query(data)
         

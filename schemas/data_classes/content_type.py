@@ -6,4 +6,4 @@ class ContentType(Enum):
     QURAN = "quran"
     HADITH = "hadith"
     TAFSEER = "tafseer"
-    GENERAL = "general"
+    GENERAL = "web"

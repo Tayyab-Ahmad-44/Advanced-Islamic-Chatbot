@@ -20,6 +20,7 @@ class GroqService:
         Transcribe an audio file (English or Russian) using Open Ai's Whisper model.
         """
         try:
+            print(file_path)
             with open(file_path, "rb") as f:
                 audio_bytes = f.read()
 
