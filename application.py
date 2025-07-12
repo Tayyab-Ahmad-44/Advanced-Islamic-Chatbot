@@ -30,7 +30,7 @@ qdrant_configs = {
     "tafseer": {
         "url": settings.TAFSEER_QDRANT_URL,
         "api_key": settings.TAFSEER_QDRANT_API_KEY,
-        "collection": "tafseer_quran"
+        "collection": "quran_tafseer"
     }
 }
 
