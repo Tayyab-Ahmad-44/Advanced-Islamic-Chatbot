@@ -91,7 +91,7 @@ async def process_audio_query(request: AudioQuerySchema):
             return translation_response
 
 
-        query = transcription_response["message"]
+        query = translation_response["message"]
 
 
         response = langgraph_service.query(query.text)
