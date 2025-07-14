@@ -155,8 +155,8 @@ class LanggraphService:
             for source_type, documents in state.retrieved_documents.items():
                 if documents:
                     source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
-                    for i, doc in enumerate(documents[:3], 1):
-                        source_context += f"{i}. {doc['content']}\n"
+                    for i, doc in enumerate(documents):
+                        source_context += f"{i}.\nContent: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
                     context_sections.append(source_context)
             
             full_context = "\n".join(context_sections)

@@ -39,20 +39,9 @@ class QdrantService:
 
             qdrant_client = self.qdrant_clients[content_type_value]
             collection_name = self.collection_configs[content_type_value]
-
-            # Create context-aware query if we have documents from other sources
-            enhanced_query = state.user_query
-            if state.retrieved_documents:
-                context_snippets = []
-                for source, docs in state.retrieved_documents.items():
-                    if docs:
-                        context_snippets.append(f"Related {source}: {docs[0]['content'][:100]}...")
-                
-                if context_snippets:
-                    enhanced_query = f"{state.user_query}\n\nContext from other sources:\n" + "\n".join(context_snippets)
             
             # Generate query embedding
-            query_embedding = self.embeddings.embed_query(enhanced_query)
+            query_embedding = self.embeddings.embed_query(state.user_query)
             
             # Search in Qdrant
             search_results = qdrant_client.search(
@@ -63,24 +52,30 @@ class QdrantService:
                 with_vectors=False
             )
             
+            # print("\n\n\n\n\n", search_results, "\n\n\n\n")
+            
             # Format retrieved documents
             documents = []
             for result in search_results:
                 doc = {
-                    'content': result.payload.get('content', ''),
+                    'content': result.payload.get('page_content', ''),
                     'metadata': result.payload.get('metadata', {}),
                     'score': result.score,
                     'source': content_type_value
                 }
                 documents.append(doc)
-            
+                
+
+            print("\n\n\nDocuments: ", documents, "\n\n\n")
+
+
             # Store documents by source type
             if content_type_value not in state.retrieved_documents:
                 state.retrieved_documents[content_type_value] = []
             state.retrieved_documents[content_type_value].extend(documents)
-            
+
             logging.info(f"Retrieved {len(documents)} documents from {content_type_value}")
-            
+
         except Exception as e:
             logging.error(f"Error retrieving documents from {content_type_value}: {e}")
             if not state.error_message:

@@ -24,7 +24,7 @@ class OpenAIService:
     def __init__(self, openai_model: str, openai_api_key: str):
         openai.api_key = openai_api_key
         self.llm = ChatOpenAI(model=openai_model, api_key=openai_api_key)
-        self.embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_api_key)
 
 
 
@@ -115,6 +115,9 @@ class OpenAIService:
             # Initialize llm_instance with structured output if schema is provided else use simple llm to invoke.
             llm_instance = self.llm.with_structured_output(schema) if schema else self.llm  
             response = llm_instance.invoke(messages)
+
+
+            print(response)
 
 
             return {"status": "success", "message": response.content if not schema else response}

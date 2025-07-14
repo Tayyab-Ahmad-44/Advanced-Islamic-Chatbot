@@ -1,14 +1,14 @@
 
-from typing import List
+from typing import Literal, List
 
 from pydantic import BaseModel, Field
 
 
 class QueryClassificationSchema(BaseModel):
     """Structured output for query classification"""
-    required_sources: List[str] = Field(
+    required_sources: List[Literal['quran', 'hadith', 'tafseer']] = Field(
         description="List of required sources from: quran, hadith, tafseer"
-    )
+    ) 
     reasoning: str = Field(
         description="Brief explanation of why these sources were selected"
     )

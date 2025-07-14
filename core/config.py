@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.3"
     LOGGING_DIR: str = "logs"
     LLM_MODEL: str = "gpt-4.1-nano"
+    QURAN_COLLECTION_NAME: str = "quran_collection"
+    HADITH_COLLECTION_NAME: str = "hadith_collection"
+    TAFSEER_COLLECTION_NAME: str = "tafseer_collection"
 
     GROQ_API_KEY: str
     OPENAI_API_KEY: str

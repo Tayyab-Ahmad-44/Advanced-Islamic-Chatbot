@@ -20,17 +20,17 @@ qdrant_configs = {
     "quran": {
         "url": settings.QURAN_QDRANT_URL,
         "api_key": settings.QURAN_QDRANT_API_KEY,
-        "collection": "quran_translation_tafseer"
+        "collection": settings.QURAN_COLLECTION_NAME
     },
     "hadith": {
         "url": settings.HADITH_QDRANT_URL,
         "api_key": settings.HADITH_QDRANT_API_KEY,
-        "collection": "hadith_collection"
+        "collection": settings.HADITH_COLLECTION_NAME
     },
     "tafseer": {
         "url": settings.TAFSEER_QDRANT_URL,
         "api_key": settings.TAFSEER_QDRANT_API_KEY,
-        "collection": "quran_tafseer"
+        "collection": settings.TAFSEER_COLLECTION_NAME
     }
 }
 

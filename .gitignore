@@ -5,3 +5,4 @@ __pycache__
 recordings
 __pycache__/
 logs
+data_prep/
