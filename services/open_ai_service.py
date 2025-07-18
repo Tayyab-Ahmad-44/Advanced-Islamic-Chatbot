@@ -21,10 +21,10 @@ from services.prompt_templates import (
 class OpenAIService:
     """Handles interactions with OpenAI"""
 
-    def __init__(self, openai_model: str, openai_api_key: str):
+    def __init__(self, openai_model: str, openai_api_key: str, embedding_model: str):
         openai.api_key = openai_api_key
         self.llm = ChatOpenAI(model=openai_model, api_key=openai_api_key)
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_api_key)
+        self.embeddings = OpenAIEmbeddings(model=embedding_model,openai_api_key=openai_api_key)
 
 
 
@@ -127,4 +127,4 @@ class OpenAIService:
 
 
 
-openai_service = OpenAIService(settings.LLM_MODEL, settings.OPENAI_API_KEY)
+openai_service = OpenAIService(settings.LLM_MODEL, settings.OPENAI_API_KEY, settings.EMBEDDING_MODEL)
