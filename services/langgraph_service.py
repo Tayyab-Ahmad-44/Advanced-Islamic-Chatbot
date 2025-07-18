@@ -101,9 +101,10 @@ class LanggraphService:
             search_results = self.tavily_client.search(
                 query=f"{state.user_query} in Islam.",
                 search_depth="advanced",
-                max_results=5,
+                max_results=1,
                 include_answer=True,
-                include_raw_content=True
+                include_raw_content=True,
+                
             )
             
             # Process and store search results
@@ -115,8 +116,7 @@ class LanggraphService:
                     'title': result.get('title', '')
                 }
                 web_documents.append(doc_content)
-            
-            print("\n\n\nWeb Documents: ", web_documents)
+
             
             # Store in vector database (you might want to create a separate collection for web results)
             # Or store in state for later use
@@ -266,9 +266,6 @@ class LanggraphService:
         """
         Determine the next route - this is the actual conditional edge function
         """
-        # Check if we should use fallback (GENERAL source)
-        if ContentType.GENERAL in state.required_sources:
-            return "fallback_retrieval"
 
         # Check if we have more sources to process
         if state.current_source_index < len(state.required_sources):
@@ -324,7 +321,7 @@ class LanggraphService:
 
         # Set entry point
         workflow.set_entry_point("web_search")
-        
+
         # Route from web search to classification
         workflow.add_edge("web_search", "classify_query")
 

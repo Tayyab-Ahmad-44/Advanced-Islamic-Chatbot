@@ -32,7 +32,7 @@ qdrant_configs = {
         "api_key": settings.TAFSEER_QDRANT_API_KEY,
         "collection": settings.TAFSEER_COLLECTION_NAME
     },
-    "islamic_info": {
+    "general_islamic_info": {
         "url": settings.GENERAL_ISLAMIC_INFO_URL,
         "api_key": settings.GENERAL_ISLAMIC_INFO_KEY,
         "collection": settings.ISLAMIC_INFO_COLLECTION_NAME
