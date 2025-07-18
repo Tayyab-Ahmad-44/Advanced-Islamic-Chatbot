@@ -1,7 +1,10 @@
 
 import logging
+
+from tavily import TavilyClient
 from langgraph.graph import StateGraph, END
 
+from core.config import settings
 from services.qdrant_service import QdrantService
 from services.open_ai_service import openai_service
 from schemas.data_classes.content_type import ContentType
@@ -21,6 +24,8 @@ class LanggraphService:
         self.embeddings = openai_service.embeddings
 
         self.qdrant_service = QdrantService(qdrant_configs, self.embeddings)
+        
+        self.tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
 
         self.graph = self._create_graph()
 
@@ -52,6 +57,8 @@ class LanggraphService:
                     required_sources.append(ContentType.HADITH)
                 elif source_clean == "tafseer":
                     required_sources.append(ContentType.TAFSEER)
+                elif source_clean == "general_islamic_info":
+                    required_sources.append(ContentType.GENERAL)
 
 
             # If no valid sources identified, use general fallback
@@ -77,6 +84,54 @@ class LanggraphService:
         
         return state
 
+
+
+
+
+    def _web_search_and_store(self, state: LangraphState) -> LangraphState:
+        """
+        Perform web search using Tavily and store results in vector database
+        """
+        try:
+            if not self.tavily_client:
+                logging.warning("Tavily client not initialized, skipping web search")
+                return state
+                
+            # Perform web search
+            search_results = self.tavily_client.search(
+                query=f"{state.user_query} in Islam.",
+                search_depth="advanced",
+                max_results=5,
+                include_answer=True,
+                include_raw_content=True
+            )
+            
+            # Process and store search results
+            web_documents = []
+            for result in search_results.get('results', []):
+                doc_content = {
+                    'content': result.get('content', ''),
+                    'url': result.get('url', ''),
+                    'title': result.get('title', '')
+                }
+                web_documents.append(doc_content)
+            
+            print("\n\n\nWeb Documents: ", web_documents)
+            
+            # Store in vector database (you might want to create a separate collection for web results)
+            # Or store in state for later use
+            if not hasattr(state, 'web_search_results'):
+                state.web_search_results = []
+            state.web_search_results.extend(web_documents)
+            
+            logging.info(f"Retrieved {len(web_documents)} web search results")
+            
+        except Exception as e:
+            logging.error(f"Error in web search: {e}")
+            if not hasattr(state, 'web_search_results'):
+                state.web_search_results = []
+        
+        return state
 
 
 
@@ -120,6 +175,19 @@ class LanggraphService:
 
 
 
+    def _retrieve_from_general(self, state: LangraphState) -> LangraphState:
+        """
+        Retrieve documents from General Islamic Info vector store
+        """
+        state = self._retrieve_documents(state, ContentType.GENERAL)
+        state.completed_sources.add(ContentType.GENERAL)
+        state.current_source_index += 1
+        return state
+
+
+
+
+
     def _retrieve_documents(self, state: LangraphState, content_type: ContentType) -> LangraphState:
         """
         Generic document retrieval function with enhanced context awareness
@@ -151,6 +219,13 @@ class LanggraphService:
 
             # Prepare comprehensive context from all sources
             context_sections = []
+            
+            # Add web search results if available
+            if hasattr(state, 'web_search_results') and state.web_search_results:
+                web_context = "\n--- WEB SEARCH RESULTS ---\n"
+                for i, doc in enumerate(state.web_search_results):
+                    web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
+                context_sections.append(web_context)
             
             for source_type, documents in state.retrieved_documents.items():
                 if documents:
@@ -194,17 +269,19 @@ class LanggraphService:
         # Check if we should use fallback (GENERAL source)
         if ContentType.GENERAL in state.required_sources:
             return "fallback_retrieval"
-        
+
         # Check if we have more sources to process
         if state.current_source_index < len(state.required_sources):
             current_source = state.required_sources[state.current_source_index]
-            
+
             if current_source == ContentType.QURAN:
                 return "retrieve_quran"
             elif current_source == ContentType.HADITH:
                 return "retrieve_hadith"
             elif current_source == ContentType.TAFSEER:
                 return "retrieve_tafseer"
+            elif current_source == ContentType.GENERAL:
+                return "retrieve_general"
         
         # No more sources to process
         return "generate_response"
@@ -235,16 +312,21 @@ class LanggraphService:
         workflow = StateGraph(LangraphState)
 
         # Add nodes
+        workflow.add_node("web_search", self._web_search_and_store)
         workflow.add_node("classify_query", self._classify_multi_source_query)
         workflow.add_node("route_to_source", self._route_to_next_source)  
         workflow.add_node("retrieve_quran", self._retrieve_from_quran)
         workflow.add_node("retrieve_hadith", self._retrieve_from_hadith)
         workflow.add_node("retrieve_tafseer", self._retrieve_from_tafseer)
+        workflow.add_node("retrieve_general", self._retrieve_from_general)
         workflow.add_node("fallback_retrieval", self._fallback_retrieval)
         workflow.add_node("generate_response", self._generate_comprehensive_response)
 
         # Set entry point
-        workflow.set_entry_point("classify_query")
+        workflow.set_entry_point("web_search")
+        
+        # Route from web search to classification
+        workflow.add_edge("web_search", "classify_query")
 
         # Route from classification to routing logic
         workflow.add_edge("classify_query", "route_to_source")
@@ -257,6 +339,7 @@ class LanggraphService:
                 "retrieve_quran": "retrieve_quran",
                 "retrieve_hadith": "retrieve_hadith", 
                 "retrieve_tafseer": "retrieve_tafseer",
+                "retrieve_general": "retrieve_general",
                 "fallback_retrieval": "fallback_retrieval",
                 "generate_response": "generate_response"
             }
@@ -271,7 +354,7 @@ class LanggraphService:
                 "generate_response": "generate_response"
             }
         )
-        
+
         workflow.add_conditional_edges(
             "retrieve_hadith",
             self._should_continue_retrieval,
@@ -280,7 +363,7 @@ class LanggraphService:
                 "generate_response": "generate_response"
             }
         )
-        
+
         workflow.add_conditional_edges(
             "retrieve_tafseer",
             self._should_continue_retrieval,
@@ -290,12 +373,21 @@ class LanggraphService:
             }
         )
         
+        workflow.add_conditional_edges(
+            "retrieve_general",
+            self._should_continue_retrieval,
+            {
+                "continue_retrieval": "route_to_source",
+                "generate_response": "generate_response"
+            }
+        )
+
         # Fallback goes directly to response
         workflow.add_edge("fallback_retrieval", "generate_response")
-        
+
         # End after response generation
         workflow.add_edge("generate_response", END)
-        
+
         # Compile the graph without checkpointer
         return workflow.compile()
 

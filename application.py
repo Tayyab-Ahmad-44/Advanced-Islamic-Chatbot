@@ -31,6 +31,11 @@ qdrant_configs = {
         "url": settings.TAFSEER_QDRANT_URL,
         "api_key": settings.TAFSEER_QDRANT_API_KEY,
         "collection": settings.TAFSEER_COLLECTION_NAME
+    },
+    "islamic_info": {
+        "url": settings.GENERAL_ISLAMIC_INFO_URL,
+        "api_key": settings.GENERAL_ISLAMIC_INFO_KEY,
+        "collection": settings.ISLAMIC_INFO_COLLECTION_NAME
     }
 }
 
@@ -54,13 +59,13 @@ async def process_text_query(request: TextQuerySchema):
         if translation_response["status"] == "error":
             return translation_response
 
-        
+
         query = translation_response["message"]
 
 
         response = langgraph_service.query(query.text)
-        
-        
+
+
         if query.is_russian:
             conversion_response = openai_service.convert_response_to_russian(response)
             if conversion_response["status"] == "error":
@@ -69,9 +74,9 @@ async def process_text_query(request: TextQuerySchema):
             response = conversion_response['message']
 
 
-        return {"status": "success", "message": response} 
+        return {"status": "success", "message": response}
 
-    except Exception as e: 
+    except Exception as e:
         return {"status": "error", "message": f"Error processing query: {e}"}
 
 
