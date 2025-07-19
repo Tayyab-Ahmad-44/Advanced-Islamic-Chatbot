@@ -10,6 +10,18 @@ from schemas.routes.audio_query import AudioQuerySchema
 from application import process_text_query, process_audio_query
 
 
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+"""
+
+# Inject the CSS
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+
 # Page configuration
 st.set_page_config(
     page_title="Islamic Chatbot",

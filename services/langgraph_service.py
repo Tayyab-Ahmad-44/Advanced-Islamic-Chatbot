@@ -106,7 +106,7 @@ class LanggraphService:
                 include_raw_content=True,
                 
             )
-            
+
             # Process and store search results
             web_documents = []
             for result in search_results.get('results', []):
