@@ -7,11 +7,12 @@ class Settings(BaseSettings):
     LOGGING_DIR: str = "logs"
     LLM_MODEL: str = "gpt-4.1-nano"
     EMBEDDING_MODEL: str = "text-embedding-3-small"             #new added
-    QURAN_COLLECTION_NAME: str = "quran_collection"
+    QURAN_COLLECTION_NAME: str = "new_quran_translation"        #updated
     HADITH_COLLECTION_NAME: str = "hadith_collection"
     TAFSEER_COLLECTION_NAME: str = "tafseer_collection"
     ISLAMIC_INFO_COLLECTION_NAME: str = "general_islamic_info"
 
+    DEEPL_API_KEY: str
     GROQ_API_KEY: str
     TAVILY_API_KEY: str
     OPENAI_API_KEY: str

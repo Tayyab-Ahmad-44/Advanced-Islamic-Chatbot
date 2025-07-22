@@ -23,7 +23,7 @@ class GroqService:
             print(file_path)
             with open(file_path, "rb") as f:
                 audio_bytes = f.read()
-
+            
             
             response = self.client.audio.transcriptions.create(
                 file=(os.path.basename(file_path), audio_bytes),

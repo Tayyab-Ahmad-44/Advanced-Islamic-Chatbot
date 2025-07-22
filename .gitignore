@@ -2,7 +2,7 @@
 .env
 venv
 __pycache__
-recordings
+recordings/
 __pycache__/
 logs
 data_prep/
