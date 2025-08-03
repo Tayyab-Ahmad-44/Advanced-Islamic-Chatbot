@@ -2,6 +2,8 @@ import deepl
 from core.config import settings
 from services.open_ai_service import openai_service
 
+import logging
+logger = logging.getLogger(__name__)
 
 
 
@@ -19,10 +21,11 @@ class Deepl_Service():
         try: 
             # First check if already in English
             is_english = openai_service.is_english_with_llm(query)
-            print(f" is_english_with_llm result :   {is_english}")
+            logger.info(f"is_english_with_llm result: {is_english}")
             
             if is_english:
-                print("English query detected successfully")
+                
+                logger.info("English query detected successfully")
                 return {
                     "status": "success", 
                     "processed_query": query, 
@@ -31,22 +34,24 @@ class Deepl_Service():
                 }
             
             
-            print("Non-English query detected, translating...")
+            logger.info("Non-English query detected, translating...")
             translated_query = self.translator.translate_text(query, target_lang="EN-US")
             detected_lang = translated_query.detected_source_lang
+            logger.info(f"Detected language: {detected_lang}")
             
             
             print(f"Detected language: {detected_lang}")
                 
                 
             if detected_lang.upper() in ["RU", "UK"]:
-                
-                return {"status": "success", "processed_query": translated_query.text, "detected_language": detected_lang.upper()}
+                logger.info(f"Translated from supported language {detected_lang.upper()}")
+                # return {"status": "success", "processed_query": translated_query.text, "detected_language": detected_lang.upper()}
+                return {"status": "success", "processed_query": query, "detected_language": detected_lang.upper()}
         
         
             return {
                 "status": "success", 
-                "processed_query": translated_query.text,
+                "processed_query": query,
                 "detected_language": detected_lang
             }
                 
@@ -75,14 +80,23 @@ class Deepl_Service():
         
         
     def translate_response(self, response: str, detected_lang:str)-> str:
-        print("inside translate_response fun")
         
+        logger.debug("Inside translate_response | Detected language: %s", detected_lang)
+        
+       
         if detected_lang.upper() != "EN":
-            translated = self.translator.translate_text(response, target_lang="RU")
-            return translated.text
+            try:
+                translated = self.translator.translate_text(response, target_lang="RU")
+                logger.info("Translated response to RU successfully")
+                return translated.text
         
+
+            except Exception as e:
+                logger.error("Translation error: %s", e)
+                return response
+
+        logger.debug("No translation needed; returning original response.")
         return response
-    
     
 
 

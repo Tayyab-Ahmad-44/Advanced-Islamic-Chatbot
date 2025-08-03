@@ -1,5 +1,6 @@
 
 import logging
+logger = logging.getLogger(__name__)
 
 from tavily import TavilyClient
 from langgraph.graph import StateGraph, END
@@ -9,7 +10,10 @@ from services.qdrant_service import QdrantService
 from services.open_ai_service import openai_service
 from schemas.data_classes.content_type import ContentType
 from schemas.data_classes.langraph_state import LangraphState
+from services.deepL_service import Deepl_Service
 
+
+deepl_services = Deepl_Service()
 
 
 class LanggraphService:
@@ -29,6 +33,9 @@ class LanggraphService:
 
         self.graph = self._create_graph()
 
+        self.deepl_services = Deepl_Service()
+        
+        # self.is_english_query =
 
 
 
@@ -207,48 +214,224 @@ class LanggraphService:
 
 
 
-
     def _generate_comprehensive_response(self, state: LangraphState) -> LangraphState:
         """
         Generate final response using all retrieved context from multiple sources
         """
+        
+        logger.info("Starting _generate_comprehensive_response")
+        
         try:
             if state.error_message and not state.retrieved_documents:
+                logger.warning(f"Encountered error with no documents: {state.error_message}")
                 state.final_response = f"I apologize, but I encountered an error: {state.error_message}"
                 return state
 
+
+            query_lang = state.detected_language
+            logger.info(f"Detected query language inside gen_comprehensive_response function: {query_lang.upper()}")
+
+
             # Prepare comprehensive context from all sources
-            context_sections = []
-            
-            # Add web search results if available
-            if hasattr(state, 'web_search_results') and state.web_search_results:
-                web_context = "\n--- WEB SEARCH RESULTS ---\n"
-                for i, doc in enumerate(state.web_search_results):
-                    web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
-                context_sections.append(web_context)
-            
-            for source_type, documents in state.retrieved_documents.items():
-                if documents:
-                    source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
-                    for i, doc in enumerate(documents):
-                        source_context += f"{i}.\nContent: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
-                    context_sections.append(source_context)
-            
-            full_context = "\n".join(context_sections)
+            if query_lang.upper() != "EN":
+                texts_to_translate = []  # Collect all texts that need translation
+                context_items = []  # Store all context items in order with their type
+                
+                # Handle web search results
+                if hasattr(state, 'web_search_results') and state.web_search_results:
+                    logger.info("Adding web search results to translation batch")
+                    web_context = "\n--- WEB SEARCH RESULTS ---\n"
+                    for i, doc in enumerate(state.web_search_results):
+                        web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
+                    
+                    texts_to_translate.append(web_context)
+                    context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
+                
+                
+                
+                # Process retrieved documents by source type
+                for source_type, documents in state.retrieved_documents.items():
+                    logger.debug(f"Processing source_type: {source_type} with {len(documents)} documents")
+                    
+                    if documents:
+                        if source_type == 'quran':
+                            # Quran uses Russian from metadata - no translation needed
+                            quran_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            
+                            for i, doc in enumerate(documents):
+                                ru_text = doc['metadata'].get('ru_translation', 'No RU translation available')
+                                metadata = doc["metadata"]
+                                metadata.pop("Tafsir")
+                                quran_source_context += f"{i}.\nRU_Translation: {ru_text}\nMetadata: {metadata}\n\n"
+                                
+                            context_items.append({'type': 'direct', 'content': quran_source_context})
 
-            response = openai_service.generate_response(state.user_query, full_context)
+                        elif source_type == 'tafseer':
+                            # Tafseer uses metadata directly - no translation needed
+                            tafseer_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            
+                            for i, doc in enumerate(documents):
+                                metadata = doc.get('metadata', {})
+                                tafseer_keys = ['As_Saadi_Tafseer', 'abu_Adil_tafsir', 'Ibni_kathir_quran_tafsir']
+                                
+                                for key in tafseer_keys:
+                                    if key in metadata and metadata[key]:  # Check if value exists and not empty
+                                        tafseer_source_context += f"{key}: {metadata[key]}\nMetadata: {doc['metadata']}\n\n"
+                                        
+                            context_items.append({'type': 'direct', 'content': tafseer_source_context})
+                        
+                        
+                        
+                        elif source_type == 'hadith':
+                            # Hadith content needs translation - collect for batch
+                            hadith_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            
+                            for i, doc in enumerate(documents):
+                                hadith_source_context += f"\n{i}: Hadith_content: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
+                            
+                            texts_to_translate.append(hadith_source_context)
+                            logger.info("Adding hadith to translation batch")
+                            context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
+                        
+                        
+                        
+                        elif source_type == 'general_islamic_info':
+                            # General content needs translation - collect for batch
+                            general_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            
+                            for i, doc in enumerate(documents):
+                                general_source_context += f"\n{i}: General_content: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
+                            
+                            texts_to_translate.append(general_source_context)
+                            logger.info("Adding general Islamic info to translation batch")
+                            context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
 
+
+
+                # Perform batch translation with fallback strategy
+                translated_texts = []
+                if texts_to_translate:
+                    logger.info(f"Translating {len(texts_to_translate)} sections in batch...")
+                    
+                    try:
+                        # Attempt batch translation first
+                        combined_text = "\n\n===SECTION_SEPARATOR===\n\n".join(texts_to_translate)
+                        batch_translation = self.deepl_services.translate_response(combined_text, query_lang)
+                        
+                        logger.info("Batch translation completed successfully!")
+                        logger.debug(f"Received batch translated text: {batch_translation[:200]}...")  # Log first 200 chars only
+                        
+                        translated_texts = batch_translation.split("\n\n===SECTION_SEPARATOR===\n\n")
+                        
+                        
+                        # Validate that we got the expected number of sections back
+                        if len(translated_texts) != len(texts_to_translate):
+                            logger.warning(f"Expected {len(texts_to_translate)} sections, got {len(translated_texts)}. Falling back to individual translation.")
+                            raise ValueError("Section count mismatch in batch translation")
+                        
+                        logger.info(f"Batch translation validation passed. Got {len(translated_texts)} sections back.")
+                        
+                        
+                        
+                    except Exception as e:
+                        logger.error(f"Batch translation failed: {str(e)}")
+                        logger.info("Falling back to individual translation")
+                        
+                        
+                        # Fallback: translate each section individually
+                        translated_texts = []
+                        for i, text in enumerate(texts_to_translate):
+                            try:
+                                individual_translation = self.deepl_services.translate_response(text, query_lang)
+                                translated_texts.append(individual_translation)
+                                logger.debug(f"Section {i+1}/{len(texts_to_translate)} translated individually")
+                                
+                            except Exception as individual_error:
+                                logger.error(f"Translation failed for section {i+1}: {individual_error}")
+                                translated_texts.append(text)  # Use original text if translation fails
+                
+                
+                # Add translated sections to context in correct order
+                final_context_sections = []
+                translation_index = 0
+                
+                for item in context_items:
+                    if item['type'] == 'direct':
+                        # Add direct content (no translation needed)
+                        final_context_sections.append(item['content'])
+                        
+                    elif item['type'] == 'translate':
+                        # Add translated content if available
+                        if translation_index < len(translated_texts):
+                            # Check if this is web search (first translate item)
+                            if translation_index == 0 and hasattr(state, 'web_search_results') and state.web_search_results:
+                                logger.debug("Adding translated web search results")
+                            
+                            final_context_sections.append(translated_texts[translation_index])
+                            translation_index += 1
+                        else:
+                            logger.warning(f"Missing translation for item at index {translation_index}")
+
+                full_context = "\n\n\n".join(final_context_sections)
+                logger.info("Final context compiled successfully for non-English query")
+                print(f"\n---------------------Russain_final_context-----------------------\n{full_context}")
+                
+
+                    # Generate response using the prepared context
+                logger.info("Sending Russain context to OpenAI for response generation")
+                response = openai_service.generate_response(state.user_query, full_context, state.detected_language)
+                state.final_response = response['message']
+                logger.info("Russain Response generated successfully")
+
+
+                            # ------ if EN Qury detected
+            else:
+                logger.info("Query is in English. Assembling context without translation.")
+                context_sections = []
+                
+                # Add web search results if available
+                if hasattr(state, 'web_search_results') and state.web_search_results:
+                    web_context = "\n--- WEB SEARCH RESULTS ---\n"
+                    for i, doc in enumerate(state.web_search_results):
+                        web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
+                    context_sections.append(web_context)
+                
+                # Add retrieved documents
+                for source_type, documents in state.retrieved_documents.items():
+                    if documents:
+                        source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                        
+                        for i, doc in enumerate(documents):
+                            source_context += f"{i}.\nContent: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
+                        
+                        context_sections.append(source_context)
+                
+                full_context = "\n".join(context_sections)
+                logger.info("English context compiled successfully")
+
+            # Generate response using the prepared context
+            logger.info("Sending context to OpenAI for response generation")
+            response = openai_service.generate_response(state.user_query, full_context, state.detected_language)
             state.final_response = response['message']
+            logger.info("English Response generated successfully")
+
 
         except Exception as e:
-            logging.error(f"Error generating response: {e}")
-            state.final_response = f"I apologize, but I encountered an error while generating the response: {str(e)}"
+            logger.error(f"Error in _generate_comprehensive_response: {str(e)}")
+            error_msg = f"I apologize, but I encountered an error while generating the response: {str(e)}"
+            
+            # Translate error message for non-English queries
+            if hasattr(state, 'detected_language') and state.detected_language.upper() != "EN":
+                try:
+                    error_msg = self.deepl_services.translate_response(error_msg, state.detected_language)
+                except Exception as translation_error:
+                    logger.error(f"Failed to translate error message: {translation_error}")
+            
+            state.final_response = error_msg
 
         return state
-
-
-
-
+                    
+  
 
     def _route_to_next_source(self, state: LangraphState) -> LangraphState:
         """
@@ -392,7 +575,7 @@ class LanggraphService:
 
 
 
-    def query(self, user_query: str, base_prompt: str = "") -> str:
+    def query(self, user_query: str, lang_detected: str, base_prompt: str = "") -> str:
         """
         Main function to process user query with multi-source retrieval
         
@@ -412,8 +595,10 @@ class LanggraphService:
                 completed_sources=set(),
                 retrieved_documents={},
                 final_response="",
-                current_source_index=0
+                current_source_index=0,
+                detected_language=lang_detected  # <-- passed
             )
+            logging.info(f"Langraph initial_state.detected_language: {initial_state.detected_language}")
             
             # Run the graph without configuration (no checkpointer)
             final_state = self.graph.invoke(initial_state)

@@ -1,8 +1,9 @@
 
 from fastapi import FastAPI, APIRouter, HTTPException
 
+
 from core.config import settings
-from core.logging import configure_logging
+from core.app_logging import configure_logging
 from services.groq_service import groq_service
 from services.open_ai_service import openai_service
 from schemas.routes.text_query import TextQuerySchema
@@ -12,7 +13,7 @@ from services.deepL_service import Deepl_Service
 
 
 configure_logging()
-
+import logging
 
 application = FastAPI()
 
@@ -57,12 +58,14 @@ async def main():
 async def process_text_query(request: TextQuerySchema):  
     """Process user text query and return Islamic chatbot response"""
     user_input = request.query.strip()
+    logging.info(f"Received user query: {user_input}")
 
-    
     try:
         translation_result = deepl_services.detect_and_translate_query(user_input)
+        logging.info(f"Translation result: {translation_result}")
         
         if translation_result.get("status") != "success":
+            logging.error("Language detection or translation failed.")
             raise HTTPException(status_code=400, detail="Language detection or translation failed.")
         
         
@@ -70,21 +73,19 @@ async def process_text_query(request: TextQuerySchema):
         processed_query =  translation_result["processed_query"]
         detected_lang =  translation_result["detected_language"]
         
-        print(f"translated query : {processed_query}")
-        print(f"detected_lang : {detected_lang}")
+        logging.info(f"Processed query: {processed_query}")
+        logging.info(f"Detected language inside application.py : {detected_lang}")
         
         #query to llm
-        llm_response = langgraph_service.query(processed_query)
+        llm_response = langgraph_service.query(processed_query, detected_lang)
         
         if not llm_response:
+            logging.error("LLM response generation failed.")
             raise HTTPException(status_code=500, detail="Failed to generate LLM response.")
         
-           
-        final_response = deepl_services.translate_response(llm_response, detected_lang)
-        print("final responce is generated successfully ")
         return {
             "status": "success",
-            "message": final_response }
+            "message": llm_response }
 
 
 
@@ -125,7 +126,7 @@ async def process_audio_query(request: AudioQuerySchema):
         
         
         #query to llm
-        llm_response = langgraph_service.query(processed_query)
+        llm_response = langgraph_service.query(processed_query, detected_lang)
         
         if not llm_response:
             raise HTTPException(status_code=500, detail="Failed to generate LLM response.")

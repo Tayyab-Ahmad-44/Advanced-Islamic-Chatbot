@@ -8,10 +8,10 @@ from langchain.schema import HumanMessage, SystemMessage
 
 from core.config import settings
 from schemas.structured_outputs.query_classification import QueryClassificationSchema
-from schemas.structured_outputs.query_translation import TranslateQuerySchema
+
 
 from services.prompt_templates import (
-    QUERY_CLASSIFICATION_PROMPT, FINAL_RESPONSE_PROMPT
+    QUERY_CLASSIFICATION_PROMPT, ENGLISH_FINAL_RESPONSE_PROMPT, RUSSAIN_FINAL_RESPONSE_PROMPT
 )
 
 
@@ -35,10 +35,21 @@ class OpenAIService:
 
 
 
-    def generate_response(self, query, context):
+    def generate_response(self, query, context, detect_lang: str):
+        
         """Generate a comprehensive/final response to a query."""
-        prompt = self._replacer(FINAL_RESPONSE_PROMPT, context=context)
-        return self._process_request(prompt, query, None)
+        
+        if detect_lang == 'RU':
+            
+            prompt = self._replacer(RUSSAIN_FINAL_RESPONSE_PROMPT, context=context)
+            
+            return self._process_request(prompt, query, None)
+
+            
+            
+        else:
+            prompt = self._replacer(ENGLISH_FINAL_RESPONSE_PROMPT , context=context)
+            return self._process_request(prompt, query, None)
 
 
 
@@ -135,4 +146,5 @@ class OpenAIService:
 
 
 openai_service = OpenAIService(settings.LLM_MODEL, settings.OPENAI_API_KEY, settings.EMBEDDING_MODEL)
+
 

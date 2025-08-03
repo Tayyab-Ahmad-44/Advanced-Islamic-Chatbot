@@ -17,3 +17,4 @@ class LangraphState:
     completed_sources: Set[ContentType] = field(default_factory=set)
     required_sources: List[ContentType] = field(default_factory=list)
     retrieved_documents: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    detected_language: Optional[str] = None  # <-- add this field

@@ -17,3 +17,5 @@ def configure_logging():
         # Format log messages
         format="%(asctime)s - %(levelname)s - %(message)s"
     )
+
+
