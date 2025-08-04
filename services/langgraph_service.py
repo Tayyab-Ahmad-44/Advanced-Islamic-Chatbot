@@ -108,7 +108,7 @@ class LanggraphService:
             search_results = self.tavily_client.search(
                 query=f"{state.user_query} in Islam.",
                 search_depth="advanced",
-                max_results=1,
+                max_results=1,                            #updated
                 include_answer=True,
                 include_raw_content=True,
                 
@@ -213,7 +213,6 @@ class LanggraphService:
 
 
 
-
     def _generate_comprehensive_response(self, state: LangraphState) -> LangraphState:
         """
         Generate final response using all retrieved context from multiple sources
@@ -227,27 +226,45 @@ class LanggraphService:
                 state.final_response = f"I apologize, but I encountered an error: {state.error_message}"
                 return state
 
-
             query_lang = state.detected_language
             logger.info(f"Detected query language inside gen_comprehensive_response function: {query_lang.upper()}")
 
-
             # Prepare comprehensive context from all sources
             if query_lang.upper() != "EN":
-                texts_to_translate = []  # Collect all texts that need translation
+                
+                translation_batches = []  # Store {content: text, source_info: info} for each batch
                 context_items = []  # Store all context items in order with their type
                 
                 # Handle web search results
                 if hasattr(state, 'web_search_results') and state.web_search_results:
                     logger.info("Adding web search results to translation batch")
-                    web_context = "\n--- WEB SEARCH RESULTS ---\n"
-                    for i, doc in enumerate(state.web_search_results):
-                        web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
                     
-                    texts_to_translate.append(web_context)
-                    context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
-                
-                
+                    # Extract only the content that needs translation
+                    web_contents_to_translate = []
+                    web_metadata = []
+                    
+                    for i, doc in enumerate(state.web_search_results):
+                        # Only translate the content, keep title and URL separate
+                        if doc.get('content'):
+                            web_contents_to_translate.append(doc['content'])
+                            web_metadata.append({
+                                'index': i,
+                                'title': doc.get('title', ''),
+                                'url': doc.get('url', '')
+                            })
+                    
+                    if web_contents_to_translate:
+                        # Join only content for translation
+                        web_content_batch = "\n\n===CONTENT_SEPARATOR===\n\n".join(web_contents_to_translate)
+                        translation_batches.append({
+                            'content': web_content_batch,
+                            'source_info': {
+                                'type': 'web_search',
+                                'metadata': web_metadata,
+                                'count': len(web_contents_to_translate)
+                            }
+                        })
+                        context_items.append({'type': 'translate', 'batch_index': len(translation_batches) - 1})
                 
                 # Process retrieved documents by source type
                 for source_type, documents in state.retrieved_documents.items():
@@ -260,9 +277,9 @@ class LanggraphService:
                             
                             for i, doc in enumerate(documents):
                                 ru_text = doc['metadata'].get('ru_translation', 'No RU translation available')
-                                metadata = doc["metadata"]
-                                metadata.pop("Tafsir")
-                                quran_source_context += f"{i}.\nRU_Translation: {ru_text}\nMetadata: {metadata}\n\n"
+                                metadata_copy = doc["metadata"].copy()
+                                metadata_copy.pop("Tafsir", None)  # Remove Tafsir safely
+                                quran_source_context += f"{i}.\nRU_Translation: {ru_text}\nMetadata: {metadata_copy}\n\n"
                                 
                             context_items.append({'type': 'direct', 'content': quran_source_context})
 
@@ -272,6 +289,7 @@ class LanggraphService:
                             
                             for i, doc in enumerate(documents):
                                 metadata = doc.get('metadata', {})
+                            
                                 tafseer_keys = ['As_Saadi_Tafseer', 'abu_Adil_tafsir', 'Ibni_kathir_quran_tafsir']
                                 
                                 for key in tafseer_keys:
@@ -280,80 +298,103 @@ class LanggraphService:
                                         
                             context_items.append({'type': 'direct', 'content': tafseer_source_context})
                         
-                        
-                        
                         elif source_type == 'hadith':
-                            # Hadith content needs translation - collect for batch
-                            hadith_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            # Hadith content needs translation - extract only content
+                            hadith_contents_to_translate = []
+                            hadith_metadata = []
                             
                             for i, doc in enumerate(documents):
-                                hadith_source_context += f"\n{i}: Hadith_content: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
+                                if doc.get('content'):
+                                    hadith_contents_to_translate.append(doc['content'])
+                                    hadith_metadata.append({
+                                        'index': i,
+                                        'metadata': doc.get('metadata', {})
+                                    })
                             
-                            texts_to_translate.append(hadith_source_context)
-                            logger.info("Adding hadith to translation batch")
-                            context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
-                        
-                        
+                            if hadith_contents_to_translate:
+                                # Join only content for translation
+                                hadith_content_batch = "\n\n===CONTENT_SEPARATOR===\n\n".join(hadith_contents_to_translate)
+                                translation_batches.append({
+                                    'content': hadith_content_batch,
+                                    'source_info': {
+                                        'type': 'hadith',
+                                        'metadata': hadith_metadata,
+                                        'count': len(hadith_contents_to_translate)
+                                    }
+                                })
+                                logger.info("Adding hadith to translation batch")
+                                context_items.append({'type': 'translate', 'batch_index': len(translation_batches) - 1})
                         
                         elif source_type == 'general_islamic_info':
-                            # General content needs translation - collect for batch
-                            general_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
+                            # General content needs translation - extract only content
+                            general_contents_to_translate = []
+                            general_metadata = []
                             
                             for i, doc in enumerate(documents):
-                                general_source_context += f"\n{i}: General_content: {doc['content']}\nMetadata: {doc['metadata']}\n\n"
+                                if doc.get('content'):
+                                    general_contents_to_translate.append(doc['content'])
+                                    general_metadata.append({
+                                        'index': i,
+                                        'metadata': doc.get('metadata', {})
+                                    })
                             
-                            texts_to_translate.append(general_source_context)
-                            logger.info("Adding general Islamic info to translation batch")
-                            context_items.append({'type': 'translate', 'index': len(texts_to_translate) - 1})
+                            if general_contents_to_translate:
+                                # Join only content for translation
+                                general_content_batch = "\n\n===CONTENT_SEPARATOR===\n\n".join(general_contents_to_translate)
+                                translation_batches.append({
+                                    'content': general_content_batch,
+                                    'source_info': {
+                                        'type': 'general_islamic_info',
+                                        'metadata': general_metadata,
+                                        'count': len(general_contents_to_translate)
+                                    }
+                                })
+                                logger.info("Adding general Islamic info to translation batch")
+                                context_items.append({'type': 'translate', 'batch_index': len(translation_batches) - 1})
 
-
-
-                # Perform batch translation with fallback strategy
-                translated_texts = []
-                if texts_to_translate:
-                    logger.info(f"Translating {len(texts_to_translate)} sections in batch...")
+                # Perform batch translation with improved strategy
+                translated_batches = []
+                if translation_batches:
+                    logger.info(f"Translating {len(translation_batches)} batches...")
                     
-                    try:
-                        # Attempt batch translation first
-                        combined_text = "\n\n===SECTION_SEPARATOR===\n\n".join(texts_to_translate)
-                        batch_translation = self.deepl_services.translate_response(combined_text, query_lang)
-                        
-                        logger.info("Batch translation completed successfully!")
-                        logger.debug(f"Received batch translated text: {batch_translation[:200]}...")  # Log first 200 chars only
-                        
-                        translated_texts = batch_translation.split("\n\n===SECTION_SEPARATOR===\n\n")
-                        
-                        
-                        # Validate that we got the expected number of sections back
-                        if len(translated_texts) != len(texts_to_translate):
-                            logger.warning(f"Expected {len(texts_to_translate)} sections, got {len(translated_texts)}. Falling back to individual translation.")
-                            raise ValueError("Section count mismatch in batch translation")
-                        
-                        logger.info(f"Batch translation validation passed. Got {len(translated_texts)} sections back.")
-                        
-                        
-                        
-                    except Exception as e:
-                        logger.error(f"Batch translation failed: {str(e)}")
-                        logger.info("Falling back to individual translation")
-                        
-                        
-                        # Fallback: translate each section individually
-                        translated_texts = []
-                        for i, text in enumerate(texts_to_translate):
-                            try:
-                                individual_translation = self.deepl_services.translate_response(text, query_lang)
-                                translated_texts.append(individual_translation)
-                                logger.debug(f"Section {i+1}/{len(texts_to_translate)} translated individually")
-                                
-                            except Exception as individual_error:
-                                logger.error(f"Translation failed for section {i+1}: {individual_error}")
-                                translated_texts.append(text)  # Use original text if translation fails
+                    for batch_idx, batch in enumerate(translation_batches):
+                        try:
+                            logger.info(f"Translating batch {batch_idx + 1}/{len(translation_batches)} for {batch['source_info']['type']}")
+                            logger.debug(f"Original content to translate: {batch['content'][:200]}...")
+                            
+                            # Translate only the content
+                            translated_content = self.deepl_services.translate_response(batch['content'], query_lang)
+                            
+                            logger.info(f"Batch {batch_idx + 1} translation completed successfully!")
+                            logger.debug(f"Translated content: {translated_content[:200]}...")
+                            
+                            # Split translated content back
+                            translated_parts = translated_content.split("\n\n===CONTENT_SEPARATOR===\n\n")
+                            
+                            # Validate translation
+                            expected_parts = batch['source_info']['count']
+                            if len(translated_parts) != expected_parts:
+                                logger.warning(f"Expected {expected_parts} parts, got {len(translated_parts)} for batch {batch_idx}")
+                                # If split failed, treat as single content
+                                translated_parts = [translated_content]
+                            
+                            translated_batches.append({
+                                'translated_parts': translated_parts,
+                                'source_info': batch['source_info']
+                            })
+                            
+                        except Exception as e:
+                            logger.error(f"Translation failed for batch {batch_idx}: {str(e)}")
+                            # Use original content if translation fails
+                            original_parts = batch['content'].split("\n\n===CONTENT_SEPARATOR===\n\n")
+                            translated_batches.append({
+                                'translated_parts': original_parts,
+                                'source_info': batch['source_info']
+                            })
                 
-                
-                # Add translated sections to context in correct order
+                # Reconstruct context with translated content
                 final_context_sections = []
-                translation_index = 0
+                translation_batch_index = 0
                 
                 for item in context_items:
                     if item['type'] == 'direct':
@@ -361,28 +402,46 @@ class LanggraphService:
                         final_context_sections.append(item['content'])
                         
                     elif item['type'] == 'translate':
-                        # Add translated content if available
-                        if translation_index < len(translated_texts):
-                            # Check if this is web search (first translate item)
-                            if translation_index == 0 and hasattr(state, 'web_search_results') and state.web_search_results:
-                                logger.debug("Adding translated web search results")
+                        # Add translated content
+                        batch_idx = item['batch_index']
+                        if batch_idx < len(translated_batches):
+                            translated_batch = translated_batches[batch_idx]
+                            source_info = translated_batch['source_info']
+                            translated_parts = translated_batch['translated_parts']
                             
-                            final_context_sections.append(translated_texts[translation_index])
-                            translation_index += 1
+                            # Reconstruct the section with translated content
+                            if source_info['type'] == 'web_search':
+                                section_content = f"\n--- WEB SEARCH RESULTS ---\n"
+                                for i, (translated_part, meta) in enumerate(zip(translated_parts, source_info['metadata'])):
+                                    section_content += f"{meta['index']}.\nTitle: {meta['title']}\nContent: {translated_part}\nURL: {meta['url']}\n\n"
+                            
+                            elif source_info['type'] == 'hadith':
+                                section_content = f"\n--- HADITH SOURCES ---\n"
+                                for i, (translated_part, meta) in enumerate(zip(translated_parts, source_info['metadata'])):
+                                    section_content += f"\n{meta['index']}: Hadith_content: {translated_part}\nMetadata: {meta['metadata']}\n\n"
+                            
+                            elif source_info['type'] == 'general_islamic_info':
+                                section_content = f"\n--- GENERAL_ISLAMIC_INFO SOURCES ---\n"
+                                for i, (translated_part, meta) in enumerate(zip(translated_parts, source_info['metadata'])):
+                                    section_content += f"\n{meta['index']}: General_content: {translated_part}\nMetadata: {meta['metadata']}\n\n"
+                            
+                            final_context_sections.append(section_content)
+                            logger.debug(f"Added translated {source_info['type']} section")
                         else:
-                            logger.warning(f"Missing translation for item at index {translation_index}")
+                            logger.warning(f"Missing translation for batch index {batch_idx}")
 
                 full_context = "\n\n\n".join(final_context_sections)
                 logger.info("Final context compiled successfully for non-English query")
-                print(f"\n---------------------Russain_final_context-----------------------\n{full_context}")
+                print(f"\n---------------------Russian_final_context-----------------------\n{full_context}")
                 
-
-                    # Generate response using the prepared context
-                logger.info("Sending Russain context to OpenAI for response generation")
+                # Generate response using the prepared context
+                logger.info("Sending Russian context to OpenAI for response generation")
                 response = openai_service.generate_response(state.user_query, full_context, state.detected_language)
                 state.final_response = response['message']
-                logger.info("Russain Response generated successfully")
-
+                logger.info("Russian Response generated successfully")
+                
+                
+                
 
                             # ------ if EN Qury detected
             else:
@@ -392,8 +451,10 @@ class LanggraphService:
                 # Add web search results if available
                 if hasattr(state, 'web_search_results') and state.web_search_results:
                     web_context = "\n--- WEB SEARCH RESULTS ---\n"
+                    
                     for i, doc in enumerate(state.web_search_results):
                         web_context += f"{i}.\nTitle: {doc['title']}\nContent: {doc['content']}\nURL: {doc['url']}\n\n"
+                        
                     context_sections.append(web_context)
                 
                 # Add retrieved documents

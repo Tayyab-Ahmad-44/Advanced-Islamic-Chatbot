@@ -46,9 +46,9 @@ class Deepl_Service():
             if detected_lang.upper() in ["RU", "UK"]:
                 logger.info(f"Translated from supported language {detected_lang.upper()}")
                 # return {"status": "success", "processed_query": translated_query.text, "detected_language": detected_lang.upper()}
-                return {"status": "success", "processed_query": query, "detected_language": detected_lang.upper()}
+                return {"status": "success", "processed_query": translated_query.text, "detected_language": detected_lang.upper()}
         
-        
+            logger.info(f"default processed_query is return inside detect and translate_query")
             return {
                 "status": "success", 
                 "processed_query": query,

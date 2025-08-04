@@ -6,8 +6,8 @@ from pathlib import Path
 class Settings(BaseSettings):
     VERSION: str = "1.3"
     LOGGING_DIR: str = "logs"
-    # LLM_MODEL: str = "gpt-4.1-nano" 
-    LLM_MODEL: str = "gpt-4o"
+    LLM_MODEL: str = "gpt-4.1-nano" 
+    # LLM_MODEL: str = "gpt-4o"
     EMBEDDING_MODEL: str = "text-embedding-3-small"             #new added
     QURAN_COLLECTION_NAME: str = "English_Russain_quran_translation"        #updated
     HADITH_COLLECTION_NAME: str = "hadith_collection"

@@ -29,6 +29,7 @@ class OpenAIService:
 
 
     def classify_multi_source_query(self, query):
+        
         """Classify a query to determine which resources are needed."""
         return self._process_request(QUERY_CLASSIFICATION_PROMPT, query, QueryClassificationSchema)
 

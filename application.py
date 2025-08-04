@@ -69,11 +69,10 @@ async def process_text_query(request: TextQuerySchema):
             raise HTTPException(status_code=400, detail="Language detection or translation failed.")
         
         
-        print(f'translaton result status : {translation_result["status"]}')
         processed_query =  translation_result["processed_query"]
         detected_lang =  translation_result["detected_language"]
         
-        logging.info(f"Processed query: {processed_query}")
+        logging.info(f"Processed query inside Application.py : {processed_query}")
         logging.info(f"Detected language inside application.py : {detected_lang}")
         
         #query to llm
