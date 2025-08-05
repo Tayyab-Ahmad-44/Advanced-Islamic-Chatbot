@@ -23,6 +23,15 @@ class QdrantService:
             self.collection_configs[content_type] = config["collection"]
 
 
+    def _get_content_type_limit(self, content_type: ContentType) -> int:
+        """Get retrieval limit based on content type"""
+        limits = {
+            ContentType.QURAN: 5,
+            ContentType.TAFSEER: 4,      # Conservative due to huge content
+            ContentType.HADITH: 6,
+            ContentType.GENERAL: 10
+        }
+        return limits.get(content_type, 8)  # Default fallback
 
 
 
@@ -43,11 +52,12 @@ class QdrantService:
             # Generate query embedding
             query_embedding = self.embeddings.embed_query(state.user_query)
             
+            limit = self._get_content_type_limit(content_type)
             # Search in Qdrant
             search_results = qdrant_client.search(
                 collection_name=collection_name,
                 query_vector=query_embedding,
-                limit=5,
+                limit=limit,
                 with_payload=True,
                 with_vectors=False
             )

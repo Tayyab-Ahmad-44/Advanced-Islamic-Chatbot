@@ -288,14 +288,25 @@ class LanggraphService:
                             tafseer_source_context = f"\n--- {source_type.upper()} SOURCES ---\n"
                             
                             for i, doc in enumerate(documents):
+                                
                                 metadata = doc.get('metadata', {})
-                            
+                                
+                                clean_metadata = {k: v for k, v in metadata.items()
+                                                  if k not in ['As_Saadi_Tafseer', 'abu_Adil_tafsir', 'Ibni_kathir_quran_tafsir', 'ayah_translation', 'surah_number', 'En_tafsir_source', 'En_source_url', 'abu_Adil_tafsir_source', 'Ibni_kathir_tafsir_source', 'tafsir_Source', 'As-Saadi_tafsir_source',   ]
+                                                  }
+
+                                                
                                 tafseer_keys = ['As_Saadi_Tafseer', 'abu_Adil_tafsir', 'Ibni_kathir_quran_tafsir']
                                 
                                 for key in tafseer_keys:
                                     if key in metadata and metadata[key]:  # Check if value exists and not empty
-                                        tafseer_source_context += f"{key}: {metadata[key]}\nMetadata: {doc['metadata']}\n\n"
                                         
+                                        clean_metadata_copy = clean_metadata.copy() 
+                                        clean_metadata_copy["Tafsir_Source"] = key
+                                        
+                                        tafseer_source_context += f"Tafseer_Content: {metadata[key]}\nMetadata: {clean_metadata_copy}\n\n"
+                                        
+                                            
                             context_items.append({'type': 'direct', 'content': tafseer_source_context})
                         
                         elif source_type == 'hadith':
