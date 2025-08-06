@@ -1,5 +1,7 @@
 
+
 import logging
+from sentence_transformers import CrossEncoder
 
 from qdrant_client import QdrantClient
 
@@ -8,11 +10,14 @@ from schemas.data_classes.content_type import ContentType
 
 
 class QdrantService:
-    def __init__(self, qdrant_configs, embeddings):
+    def __init__(self, qdrant_configs, embeddings, reranker_model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"):
 
         self.qdrant_clients = {}
         self.collection_configs = {}
         self.embeddings = embeddings
+        
+        # Initialize reranker model
+        self.reranker = CrossEncoder(reranker_model_name)
         
         # Create separate Qdrant clients for each content type
         for content_type, config in qdrant_configs.items():
@@ -27,17 +32,43 @@ class QdrantService:
         """Get retrieval limit based on content type"""
         limits = {
             ContentType.QURAN: 5,
-            ContentType.TAFSEER: 4,      # Conservative due to huge content
+            ContentType.TAFSEER: 3,      # Conservative due to huge content
             ContentType.HADITH: 6,
             ContentType.GENERAL: 10
         }
         return limits.get(content_type, 8)  # Default fallback
 
 
+    def _rerank_documents(self, query: str, documents: list, top_k: int = None) -> list:
+        """
+        Rerank documents using cross-encoder model
+        """
+        if not documents:
+            return documents
+            
+        # Prepare query-document pairs for reranking
+        query_doc_pairs = [(query, doc['content']) for doc in documents]
+        
+        # Get relevance scores from cross-encoder
+        relevance_scores = self.reranker.predict(query_doc_pairs)
+        
+        # Add rerank scores to documents
+        for i, doc in enumerate(documents):
+            doc['rerank_score'] = float(relevance_scores[i])
+        
+        # Sort by rerank score (descending)
+        reranked_docs = sorted(documents, key=lambda x: x['rerank_score'], reverse=True)
+        
+        # Return top_k if specified
+        if top_k:
+            return reranked_docs[:top_k]
+        
+        return reranked_docs
+
 
     def retrieve_documents(self, state: LangraphState, content_type: ContentType) -> LangraphState:
         """
-        Generic document retrieval function with enhanced context awareness
+        Generic document retrieval function with enhanced context awareness and reranking
         """
         try:
             content_type_value = content_type.value
@@ -53,11 +84,11 @@ class QdrantService:
             query_embedding = self.embeddings.embed_query(state.user_query)
             
             limit = self._get_content_type_limit(content_type)
-            # Search in Qdrant
+            # Search in Qdrant - retrieve more documents for reranking
             search_results = qdrant_client.search(
                 collection_name=collection_name,
                 query_vector=query_embedding,
-                limit=limit,
+                limit=limit * 2,  # Retrieve more documents for reranking
                 with_payload=True,
                 with_vectors=False
             )
@@ -74,17 +105,19 @@ class QdrantService:
                     'source': content_type_value
                 }
                 documents.append(doc)
-                
+            
+            # Rerank documents using cross-encoder
+            reranked_documents = self._rerank_documents(state.user_query, documents, top_k=limit)
 
-            print("\n\n\nDocuments: ", documents, "\n\n\n")
-
+            print("\n\n\nReranked Documents: ", reranked_documents, "\n\n\n")
 
             # Store documents by source type
             if content_type_value not in state.retrieved_documents:
                 state.retrieved_documents[content_type_value] = []
-            state.retrieved_documents[content_type_value].extend(documents)
+            
+            state.retrieved_documents[content_type_value].extend(reranked_documents)
 
-            logging.info(f"Retrieved {len(documents)} documents from {content_type_value}")
+            logging.info(f"Retrieved and reranked {len(reranked_documents)} documents from {content_type_value}")
 
         except Exception as e:
             logging.error(f"Error retrieving documents from {content_type_value}: {e}")
@@ -92,9 +125,6 @@ class QdrantService:
                 state.error_message = f"Error retrieving documents from {content_type_value}: {str(e)}"
         
         return state
-
-
-
 
 
     def fallback_retrieval(self, state: LangraphState) -> LangraphState:
@@ -111,7 +141,7 @@ class QdrantService:
                     search_results = qdrant_client.search(
                         collection_name=collection_name,
                         query_vector=query_embedding,
-                        limit=3,
+                        limit=6,  # Retrieve more for reranking
                         with_payload=True,
                         with_vectors=False
                     )
@@ -126,9 +156,12 @@ class QdrantService:
                         }
                         documents.append(doc)
                     
+                    # Rerank documents for this source
+                    reranked_documents = self._rerank_documents(state.user_query, documents, top_k=3)
+                    
                     if content_type_value not in state.retrieved_documents:
                         state.retrieved_documents[content_type_value] = []
-                    state.retrieved_documents[content_type_value].extend(documents)
+                    state.retrieved_documents[content_type_value].extend(reranked_documents)
                         
                 except Exception as e:
                     logging.warning(f"Error searching in {content_type_value}: {e}")
